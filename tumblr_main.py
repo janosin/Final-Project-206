@@ -5,6 +5,9 @@ import json
 import sqlite3
 from operator import itemgetter
 from collections import OrderedDict
+import plotly
+import plotly.graph_objs as go
+import pandas as pd
 
 client = pytumblr.TumblrRestClient(
 	'zQYemGVerUvczk9HCM7kmjBlX3EWL5b7Va1Wi0hEbNCJMKglqZ',
@@ -12,6 +15,8 @@ client = pytumblr.TumblrRestClient(
 	'4veWODwU9G2BNUYGC41uGHcLZvTzAMooIm7rMTqoL92MCIsCIk',
 	'yZv0Yj3ueXTkZJMxUGSzcgbsHarjcXd9yiqHrDrREN714QYYHR'
 )
+
+blog_name = 'nicole-is-rad.tumblr.com'
 
 CACHE_FNAME = "206_Final_Project.json"
 # Put the rest of your caching setup here:
@@ -76,13 +81,13 @@ def tum_posts(blog):
 	
 	if blog in CACHE_DICTION:
 		
-		#print("Tumblr data was in the cache")
+		print("Tumblr data for " + blog + " was in the cache\n")
 		tum_results = CACHE_DICTION[blog] #uses data already in cache
 		return tum_results
 	
 	else:
 		
-		#print("fetching tumblr data")
+		print("fetching tumblr data for " + blog)
 		tum_posts_results = list()
 
 		for x in client.posts(blog, limit=100, offset = 0)['posts']:
@@ -102,15 +107,56 @@ def tum_posts(blog):
 		
 		CACHE_DICTION[blog] = tum_posts_results
 		cache_file = open(CACHE_FNAME, 'w') #then writes it to cache file
-		cache_file.write(json.dumps(CACHE_DICTION)+ "\n")
+		cache_file.write(json.dumps(CACHE_DICTION, indent = 2)+ "\n")
 		cache_file.close()
 		tum_results = tum_posts_results
 		return tum_results
+
+#parameter d must be an ordered dictionary
+def create_bar_graph(d):
 	
+	xvals = list()
+	yvals = list()
+
+	for x in d:
+		xvals.append(x)
+
+	for y in d.values():
+		yvals.append(y)
+
+	data = [go.Bar(
+			x= yvals,
+			y=xvals,
+			text = yvals,
+			textposition = 'auto',
+			orientation = 'h',
+			marker=dict(
+			color='rgb(176,196,222)')
+	    )]
+
+	layout = go.Layout(
+
+		title = "Number of Posts on Tumblr by Day of Week",
+		titlefont = dict (size = 30),
+
+		xaxis=dict(
+		title='Number of Tumblr Posts',
+		titlefont=dict(
+			size=18)
+			
+		)
+	)
+
+	fig = go.Figure(data=data, layout=layout)
+
+	plotly.offline.plot(fig, filename='tumblr-barchart.html')
+		
 
 def main():
+	
+	print ("Enter user url")
 
-	tum_data = tum_posts('nicole-is-rad.tumblr.com')
+	tum_data = tum_posts(blog_name)
 	
 	conn = sqlite3.connect("206FinalProject.sqlite")
 	cur = conn.cursor()
@@ -138,32 +184,53 @@ def main():
 	t_list = OrderedDict()
 		
 	
-	
-	
 	day_list = ["Sunday", "Monday", "Tuesday", "Wednesday","Thursday", "Friday", "Saturday"]
-	time_list_short = ["12:00am - 5:59am", "6:00am - 11:59am", "12:00pm - 5:59pm", "6:00pm - 11:59pm"]
+	
+	day_dic = OrderedDict()
 	
 	for item in day_list:
 		t_list[item + " 12:00am - 5:59am"] = 0
 		t_list[item + " 6:00am - 11:59am"] = 0
 		t_list[item + " 12:00pm - 5:59pm"] = 0
 		t_list[item + " 6:00pm - 11:59pm"] = 0
+		
+	for item in day_list:
+		day_dic[item] = 0
 	
-	y = (cur.execute('SELECT time_group FROM Tumblr'))
-	for item in y:
+	sq = (cur.execute('SELECT time_group FROM Tumblr'))
+	for item in sq:
 		for x in item:
 			time_list.append(x)
-	
 	
 	
 	for i in time_list:
 		t_list[i] = t_list.get(i,0) + 1
 	
-	for x in t_list:
-		print (x, t_list[x])
+	sq1 = (cur.execute('SELECT day_of_week FROM Tumblr'))
+	
+	day_list = list()
 	
 	
+	for i in sq1:
+		for x in i:
+			day_list.append(x)
 	
+	for x in day_list:
+		day_dic[x] = day_dic.get(x,0) + 1
+		
+	#create_bar_graph(day_dic)
+	
+	data_list = list()
+
+	for item in t_list:
+		
+		new_tup = (item, t_list[item])
+		data_list.append(new_tup)
+
+
+	df = pd.DataFrame(data_list, columns = ["Time of Day", "# of Posts"])
+	
+	print (df)
 	
 	conn.close()
 main()
